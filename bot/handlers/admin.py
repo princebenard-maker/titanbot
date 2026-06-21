@@ -21,7 +21,8 @@ from bot.responses import (
     AUDIT_LOGS_MESSAGE,
     INVALID_COMMAND_MESSAGE
 )
-from config.constants import ADMIN_PIN_HASH, USER_STATE_ACTIVE, USER_STATE_PENDING_APPROVAL
+from config.settings import ADMIN_PIN_HASH, ADMIN_TELEGRAM_ID
+from config.constants import USER_STATE_ACTIVE, USER_STATE_PENDING_APPROVAL
 
 logger = logging.getLogger(__name__)
 
