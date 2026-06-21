@@ -33,6 +33,9 @@ async def run():
         BotCommand("start", "Welcome to Titan V1"),
         BotCommand("help", "View all commands"),
         BotCommand("status", "Check your account status"),
+        BotCommand("signal", "Generate trade signal (pair arg)"),
+        BotCommand("regime", "Check market regime (pair arg)"),
+        BotCommand("score", "View confidence breakdown (pair arg)"),
         BotCommand("authorize", "Admin: Authorize with PIN"),
         BotCommand("dashboard", "Admin: System overview"),
         BotCommand("users", "Admin: View all users"),
@@ -41,7 +44,7 @@ async def run():
         BotCommand("logs", "Admin: View audit logs"),
     ]
     await app.bot.set_my_commands(commands)
-    logger.info("Bot commands registered")
+    logger.info("Bot commands registered (12 total)")
     
     logger.info("TITAN V1 ONLINE")
     async with app:
