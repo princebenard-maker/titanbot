@@ -25,9 +25,11 @@ async def run():
     register_admin(app)
     logger.info("TITAN V1 ONLINE")
     async with app:
+        await app.initialize()
         await app.start()
         await app.updater.start_polling(
-            drop_pending_updates=True
+            drop_pending_updates=True,
+            allowed_updates=["message","callback_query"]
         )
         await asyncio.Event().wait()
 
