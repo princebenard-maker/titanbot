@@ -9,7 +9,7 @@ from telegram.ext import Application
 
 logger = logging.getLogger(__name__)
 
-def register_signals(app: Application) -> None:
+def register_signals(application: Application) -> None:
     """
     Register signal handlers with the Telegram application.
     Placeholder for Wave 2B command integration.
