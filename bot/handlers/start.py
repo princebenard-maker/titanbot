@@ -21,5 +21,40 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text(WELCOME_MESSAGE)
     logger.info(f"User {user_id} started the bot. State: {user['state']}")
 
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    await update.message.reply_text(
+        "Titan V1 Commands\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "General:\n"
+        "/start — Welcome message\n"
+        "/help — This message\n"
+        "/status — Your account status\n\n"
+        "Admin (requires /authorize first):\n"
+        "/authorize PIN — Admin login\n"
+        "/dashboard — System overview\n"
+        "/users — All users\n"
+        "/invite — Generate invite link\n"
+        "/healthcheck — System health\n"
+        "/logs — Audit trail\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "Titan V1 — Foundation Layer"
+    )
+
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    await update.message.reply_text(
+        "Your Titan Account\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"Telegram ID: {user_id}\n"
+        "Status: Active\n"
+        "Wave: 1 — Foundation\n"
+        "Trading: Not enabled yet\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "Wave 2 coming soon."
+    )
+
 def register_start(application):
     application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("status", status_command))
