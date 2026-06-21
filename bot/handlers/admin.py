@@ -55,6 +55,12 @@ async def authorize_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await update.message.reply_text("Usage: /authorize <PIN>")
         return
 
+    # Debug lines
+    logger.info(f"PIN received: {pin}")
+    logger.info(f"PIN hash: {hashlib.sha256(pin.encode()).hexdigest()}")
+    logger.info(f"Stored hash: {ADMIN_PIN_HASH}")
+    logger.info(f"Admin ID check: {user_id} == {ADMIN_TELEGRAM_ID}")
+
     # Admin PIN verification
     valid = hmac.compare_digest(
         hashlib.sha256(pin.encode()).hexdigest(),
