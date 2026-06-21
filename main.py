@@ -1,6 +1,8 @@
 import logging, os, sys, asyncio
 from pathlib import Path
 from dotenv import load_dotenv
+from telegram import BotCommand
+
 load_dotenv()
 Path("data").mkdir(exist_ok=True)
 logging.basicConfig(level="INFO",
@@ -25,6 +27,22 @@ async def run():
     register_start(app)
     register_admin(app)
     register_signals(app)
+    
+    # Set bot commands in Telegram menu
+    commands = [
+        BotCommand("start", "Welcome to Titan V1"),
+        BotCommand("help", "View all commands"),
+        BotCommand("status", "Check your account status"),
+        BotCommand("authorize", "Admin: Authorize with PIN"),
+        BotCommand("dashboard", "Admin: System overview"),
+        BotCommand("users", "Admin: View all users"),
+        BotCommand("invite", "Admin: Generate invite link"),
+        BotCommand("healthcheck", "Admin: Check system health"),
+        BotCommand("logs", "Admin: View audit logs"),
+    ]
+    await app.bot.set_my_commands(commands)
+    logger.info("Bot commands registered")
+    
     logger.info("TITAN V1 ONLINE")
     async with app:
         await app.initialize()
