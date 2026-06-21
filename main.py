@@ -20,9 +20,11 @@ async def run():
     from telegram.ext import ApplicationBuilder
     from bot.handlers.start import register_start
     from bot.handlers.admin import register_admin
+    from bot.handlers.signals import register_signals
     app = ApplicationBuilder().token(token).build()
     register_start(app)
     register_admin(app)
+    register_signals(app)
     logger.info("TITAN V1 ONLINE")
     async with app:
         await app.initialize()
