@@ -26,10 +26,25 @@ async def signal_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbol = symbol_input.replace('USDT', '/USDT')
     await update.message.reply_text(f"🔍 Analyzing {symbol_input}...")
     try:
-        df_4h = await fetch_ohlcv(symbol, '4h', 100)
-        df_1h = await fetch_ohlcv(symbol, '1h', 100)
-        df_15m = await fetch_ohlcv(symbol, '15m', 100)
+        df_4h = await fetch_ohlcv(symbol, '4h', 200)
+        df_1h = await fetch_ohlcv(symbol, '1h', 200)
+        df_15m = await fetch_ohlcv(symbol, '15m', 200)
         result = generate_signal(df_4h, df_1h, df_15m)
+
+        from core.decision_journal import save_signal
+        if result.get('signal') != 'WAIT':
+            try:
+                await save_signal(
+                    symbol=symbol_input,
+                    signal=result.get('signal','WAIT'),
+                    score=result.get('score', 0),
+                    regime=result.get('regime','UNKNOWN'),
+                    score_breakdown=result.get(
+                        'score_breakdown', {}),
+                    reasons=result.get('reasons', {})
+                )
+            except Exception as e:
+                logger.warning(f"Could not save signal: {e}")
         signal = result.get('signal', 'WAIT')
         score = result.get('score', 0)
         regime = result.get('regime', 'UNKNOWN')
@@ -56,7 +71,7 @@ async def regime_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbol = symbol_input.replace('USDT', '/USDT')
     await update.message.reply_text(f"🔍 Checking regime for {symbol_input}...")
     try:
-        df = await fetch_ohlcv(symbol, '4h', 100)
+        df = await fetch_ohlcv(symbol, '4h', 200)
         regime = classify_regime(df)
         await update.message.reply_text(
             f"Market Regime — {symbol_input}\n"
@@ -77,7 +92,7 @@ async def score_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbol = symbol_input.replace('USDT', '/USDT')
     await update.message.reply_text(f"🔍 Calculating score for {symbol_input}...")
     try:
-        df = await fetch_ohlcv(symbol, '4h', 100)
+        df = await fetch_ohlcv(symbol, '4h', 200)
         regime = classify_regime(df)
         score_data = calculate_score(df, regime)
         msg = f"Titan Score — {symbol_input}\n"

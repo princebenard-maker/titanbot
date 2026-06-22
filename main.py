@@ -23,10 +23,12 @@ async def run():
     from bot.handlers.start import register_start
     from bot.handlers.admin import register_admin
     from bot.handlers.signals import register_signals
+    from bot.handlers.journal import register_journal
     app = ApplicationBuilder().token(token).build()
     register_start(app)
     register_admin(app)
     register_signals(app)
+    register_journal(app)
     
     # Set bot commands in Telegram menu
     commands = [
@@ -42,9 +44,11 @@ async def run():
         BotCommand("invite", "Admin: Generate invite link"),
         BotCommand("healthcheck", "Admin: Check system health"),
         BotCommand("logs", "Admin: View audit logs"),
+        BotCommand("journal", "View recent trade signals"),
+        BotCommand("expectancy", "View system performance stats"),
     ]
     await app.bot.set_my_commands(commands)
-    logger.info("Bot commands registered (12 total)")
+    logger.info("Bot commands registered (14 total)")
     
     logger.info("TITAN V1 ONLINE")
     async with app:

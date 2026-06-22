@@ -1,7 +1,6 @@
 """
 market_fetcher.py - TITAN Wave 2A
-Fetches OHLCV market data from Binance.
-READ ONLY. No trading. No orders.
+Fetches OHLCV data. READ ONLY. No trading.
 """
 import ccxt
 import pandas as pd
@@ -12,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 EXCHANGE = ccxt.binance({
     'enableRateLimit': True,
-    'options': {'defaultType': 'future'}
+    'options': {'defaultType': 'spot'}
 })
 
 SUPPORTED_PAIRS = [
@@ -20,19 +19,36 @@ SUPPORTED_PAIRS = [
     'SOL/USDT', 'ADA/USDT', 'XRP/USDT'
 ]
 
-async def fetch_ohlcv(symbol: str, timeframe: str, limit: int = 200) -> pd.DataFrame:
+async def fetch_ohlcv(
+    symbol: str,
+    timeframe: str,
+    limit: int = 200
+) -> pd.DataFrame:
     try:
         loop = asyncio.get_event_loop()
         raw = await loop.run_in_executor(
             None,
-            lambda: EXCHANGE.fetch_ohlcv(symbol, timeframe, limit=limit)
+            lambda: EXCHANGE.fetch_ohlcv(
+                symbol, timeframe, limit=limit
+            )
         )
-        df = pd.DataFrame(raw, columns=['timestamp','open','high','low','close','volume'])
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        if not raw:
+            logger.warning(f"No data for {symbol} {timeframe}")
+            return pd.DataFrame()
+        df = pd.DataFrame(
+            raw,
+            columns=['timestamp','open','high',
+                     'low','close','volume']
+        )
+        df['timestamp'] = pd.to_datetime(
+            df['timestamp'], unit='ms'
+        )
         df.set_index('timestamp', inplace=True)
+        df = df.astype(float)
+        logger.info(f"Fetched {len(df)} candles for {symbol} {timeframe}")
         return df
     except Exception as e:
-        logger.error(f"Failed to fetch {symbol} {timeframe}: {e}")
+        logger.error(f"Fetch failed {symbol} {timeframe}: {e}")
         return pd.DataFrame()
 
 def is_supported(symbol: str) -> bool:
