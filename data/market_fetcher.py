@@ -20,7 +20,7 @@ SUPPORTED_PAIRS = [
     'SOL/USDT', 'ADA/USDT', 'XRP/USDT'
 ]
 
-async def fetch_ohlcv(symbol: str, timeframe: str, limit: int = 100) -> pd.DataFrame:
+async def fetch_ohlcv(symbol: str, timeframe: str, limit: int = 200) -> pd.DataFrame:
     try:
         loop = asyncio.get_event_loop()
         raw = await loop.run_in_executor(

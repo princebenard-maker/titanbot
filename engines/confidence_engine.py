@@ -10,7 +10,7 @@ MAX_SCORE = 40
 MIN_TRADEABLE = 26
 
 def calculate_score(df: pd.DataFrame, regime: dict) -> dict:
-    if df.empty or len(df) < 50:
+    if df.empty or len(df) < 20:
         return {"total": 0, "breakdown": {}, "reasons": {}, "tradeable": False}
     scores = {}
     reasons = {}

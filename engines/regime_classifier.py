@@ -16,7 +16,7 @@ class MarketRegime:
     LOW_VOLATILITY = "LOW_VOLATILITY"
 
 def classify_regime(df: pd.DataFrame) -> dict:
-    if df.empty or len(df) < 50:
+    if df.empty or len(df) < 20:
         return {
             "regime": MarketRegime.RANGING,
             "confidence": 0,
