@@ -3,4 +3,4 @@ python-dotenv
 ccxt
 pandas
 numpy
-pandas-ta
+git+https://github.com/twopirllc/pandas-ta.git@development
