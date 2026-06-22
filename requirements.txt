@@ -3,4 +3,3 @@ python-dotenv
 ccxt
 pandas
 numpy
-pandas-ta
