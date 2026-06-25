@@ -59,3 +59,31 @@ AUDIT_LOGS_MESSAGE = """
 """
 
 INVALID_COMMAND_MESSAGE = "Invalid command."
+
+# New Wave 2B Messages
+PENDING_USERS_MESSAGE = """
+📋 *PENDING USERS* 📋
+
+{user_list}
+"""
+
+NO_PENDING_USERS_MESSAGE = "No pending users."
+
+USER_APPROVED_MESSAGE = "✅ User {user_id} approved and activated."
+USER_REJECTED_MESSAGE = "❌ User {user_id} rejected."
+USER_SUSPENDED_MESSAGE = "⏸️ User {user_id} suspended."
+USER_RESUMED_MESSAGE = "▶️ User {user_id} resumed."
+USER_NOT_FOUND_MESSAGE = "User {user_id} not found."
+
+TRADING_ENABLED_MESSAGE = "✅ Trading enabled system-wide."
+TRADING_DISABLED_MESSAGE = "⛔ Trading disabled system-wide."
+RISK_SETTINGS_MESSAGE = """
+📊 *RISK SETTINGS* 📊
+
+• Max Position Size: {max_position}%
+• Stop Loss: {stop_loss}%
+• Take Profit: {take_profit}%
+• Daily Limit: {daily_limit} trades
+"""
+
+INVALID_USER_ID_MESSAGE = "Invalid user ID. Usage: /approve <telegram_id>"

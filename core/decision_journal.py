@@ -17,7 +17,8 @@ async def save_signal(
     regime: str,
     score_breakdown: dict,
     reasons: dict,
-    entry_price: float = 0.0
+    entry_price: float = 0.0,
+    setup_type: str = 'N/A'
 ) -> int:
     details = json.dumps({
         'breakdown': score_breakdown,
@@ -26,10 +27,10 @@ async def save_signal(
     await execute_write(
         """INSERT INTO signals
            (symbol, signal, score, regime,
-            score_breakdown, entry_price)
-           VALUES (?, ?, ?, ?, ?, ?)""",
+            score_breakdown, entry_price, setup_type)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (symbol, signal, score, regime,
-         details, entry_price)
+         details, entry_price, setup_type)
     )
     row = await execute_read_one(
         "SELECT id FROM signals ORDER BY id DESC LIMIT 1"

@@ -2,10 +2,14 @@ from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
 from core.user_manager import get_or_create_user, is_admin
 from bot.responses import WELCOME_MESSAGE, WELCOME_ADMIN_MESSAGE
+from bot.handlers.admin import admin_sessions
 from config.constants import ADMIN_TELEGRAM_ID
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Import admin sessions for auth visibility check
+# Note: This is a circular import workaround - admin_sessions is set at module level
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
@@ -23,23 +27,48 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
-    await update.message.reply_text(
-        "Titan V1 Commands\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "General:\n"
-        "/start — Welcome message\n"
-        "/help — This message\n"
-        "/status — Your account status\n\n"
-        "Admin (requires /authorize first):\n"
-        "/authorize PIN — Admin login\n"
-        "/dashboard — System overview\n"
-        "/users — All users\n"
-        "/invite — Generate invite link\n"
-        "/healthcheck — System health\n"
-        "/logs — Audit trail\n"
-        "━━━━━━━━━━━━━━━━━━━━\n"
-        "Titan V1 — Foundation Layer"
-    )
+    is_admin_user = await is_admin(user_id)
+    is_authenticated = user_id in admin_sessions
+    
+    # Base commands - visible to everyone
+    msg = "Titan V1 Commands\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━\n"
+    msg += "📌 General:\n"
+    msg += "/start — Welcome message\n"
+    msg += "/help — This message\n"
+    msg += "/status — Your account status\n"
+    msg += "/signal BTCUSDT — Generate signal\n"
+    msg += "/regime BTCUSDT — Check market regime\n"
+    msg += "/score BTCUSDT — View confidence score\n"
+    msg += "/journal — View recent signals\n"
+    msg += "/expectancy — System performance\n"
+    
+    # Admin commands - only visible after authentication
+    if is_admin_user and is_authenticated:
+        msg += "\n🔐 Admin (Authorized):\n"
+        msg += "/dashboard — System overview\n"
+        msg += "/users — All users\n"
+        msg += "/pending — Pending approvals\n"
+        msg += "/approve ID — Approve user\n"
+        msg += "/reject ID — Reject user\n"
+        msg += "/suspend ID — Suspend user\n"
+        msg += "/resume ID — Resume user\n"
+        msg += "/risk — View risk settings\n"
+        msg += "/enable_trading — Enable trading\n"
+        msg += "/disable_trading — Disable trading\n"
+        msg += "/invite — Generate invite link\n"
+        msg += "/healthcheck — System health\n"
+        msg += "/logs — Audit trail\n"
+    elif is_admin_user:
+        msg += "\n🔐 Admin (Locked):\n"
+        msg += "/authorize PIN — Login to unlock\n"
+        msg += "━━━━━━━━━━━━━━━━━━━━\n"
+        msg += "⚠️ Admin commands locked.\nUse /authorize <PIN> to unlock."
+    else:
+        msg += "━━━━━━━━━━━━━━━━━━━━\n"
+        msg += "Contact admin for access."
+    
+    await update.message.reply_text(msg)
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id

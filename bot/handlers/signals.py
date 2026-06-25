@@ -41,7 +41,8 @@ async def signal_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     regime=result.get('regime','UNKNOWN'),
                     score_breakdown=result.get(
                         'score_breakdown', {}),
-                    reasons=result.get('reasons', {})
+                    reasons=result.get('reasons', {}),
+                    setup_type=result.get('setup_type', 'N/A')
                 )
             except Exception as e:
                 logger.warning(f"Could not save signal: {e}")
@@ -49,13 +50,19 @@ async def signal_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         score = result.get('score', 0)
         regime = result.get('regime', 'UNKNOWN')
         reason = result.get('reason', '')
+        setup_type = result.get('setup_type', 'N/A')
         emoji = "🟢" if signal=="LONG" else "🔴" if signal=="SHORT" else "⚪"
+        
+        # Format setup type for display
+        setup_display = setup_type.replace('_', ' ') if setup_type else 'N/A'
+        
         await update.message.reply_text(
             f"Titan Signal — {symbol_input}\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"Signal: {emoji} {signal}\n"
             f"Score: {score}/40\n"
             f"Regime: {regime}\n"
+            f"Setup: {setup_display}\n"
             f"Reason: {reason}\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"⚠️ Paper mode only. Not financial advice.")

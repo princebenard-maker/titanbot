@@ -1,5 +1,6 @@
 from db.database import execute_write, execute_read_one
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -9,6 +10,7 @@ async def run_migrations():
     await create_audit_logs_table()
     await create_signals_table()
     await create_expectancy_log_table()
+    await add_setup_type_column()
     logger.info("Database migrations completed.")
 
 async def create_users_table():
@@ -69,3 +71,24 @@ async def create_expectancy_log_table():
         )
     """)
     logger.info("Expectancy log table ensured.")
+
+async def add_setup_type_column():
+    """Add setup_type column to signals table if it doesn't exist."""
+    from db.database import execute_read_one
+    # Check if column exists
+    result = await execute_read_one("PRAGMA table_info(signals)")
+    if result:
+        # Check all columns
+        import sqlite3
+        conn = sqlite3.connect(os.getenv("DB_PATH", "./data/titanbot.db"))
+        cursor = conn.execute("PRAGMA table_info(signals)")
+        columns = [row[1] for row in cursor.fetchall()]
+        conn.close()
+        
+        if 'setup_type' not in columns:
+            await execute_write("""
+                ALTER TABLE signals ADD COLUMN setup_type TEXT DEFAULT 'N/A'
+            """)
+            logger.info("Added setup_type column to signals table.")
+        else:
+            logger.info("setup_type column already exists.")

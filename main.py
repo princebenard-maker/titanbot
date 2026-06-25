@@ -41,6 +41,14 @@ async def run():
         BotCommand("authorize", "Admin: Authorize with PIN"),
         BotCommand("dashboard", "Admin: System overview"),
         BotCommand("users", "Admin: View all users"),
+        BotCommand("pending", "Admin: View pending users"),
+        BotCommand("approve", "Admin: Approve user by ID"),
+        BotCommand("reject", "Admin: Reject user by ID"),
+        BotCommand("suspend", "Admin: Suspend user by ID"),
+        BotCommand("resume", "Admin: Resume user by ID"),
+        BotCommand("risk", "Admin: View risk settings"),
+        BotCommand("enable_trading", "Admin: Enable trading"),
+        BotCommand("disable_trading", "Admin: Disable trading"),
         BotCommand("invite", "Admin: Generate invite link"),
         BotCommand("healthcheck", "Admin: Check system health"),
         BotCommand("logs", "Admin: View audit logs"),
@@ -48,7 +56,7 @@ async def run():
         BotCommand("expectancy", "View system performance stats"),
     ]
     await app.bot.set_my_commands(commands)
-    logger.info("Bot commands registered (14 total)")
+    logger.info("Bot commands registered (21 total)")
     
     logger.info("TITAN V1 ONLINE")
     async with app:
