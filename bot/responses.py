@@ -87,3 +87,10 @@ RISK_SETTINGS_MESSAGE = """
 """
 
 INVALID_USER_ID_MESSAGE = "Invalid user ID. Usage: /approve <telegram_id>"
+
+# Wave 2C/2D Messages
+HEALTH_OK_MESSAGE = "✅ Titan Health: {status}\nScore: {score}%\nLast check: {time}"
+HEALTH_WARNING_MESSAGE = "⚠️ Titan Health: {status}\nScore: {score}%\nSome subsystems need attention."
+HEALTH_CRITICAL_MESSAGE = "🚨 Titan Health: CRITICAL\nScore: {score}%\nImmediate attention required."
+SYSTEM_STATE_MESSAGE = "Current state: {state}\nCan trade: {can_trade}"
+RECOVERY_SESSION_MESSAGE = "Recovery session {id}: {status}\nFinal state: {final_state}"

@@ -19,16 +19,35 @@ async def run():
     from db.migrations import run_migrations
     await run_migrations()
     logger.info("Database ready")
+    
+    # Initialize Wave 2C/2D components
+    from core.state_manager import initialize_state
+    from core.health_monitor import get_health_monitor
+    from core.recovery_engine import get_recovery_engine
+    
+    await initialize_state()
+    logger.info("State manager initialized")
+    
+    recovery_engine = get_recovery_engine()
+    await recovery_engine.initialize()
+    logger.info("Recovery engine initialized")
+    
+    health_monitor = get_health_monitor()
+    await health_monitor.start()
+    logger.info("Health monitor started")
+    
     from telegram.ext import ApplicationBuilder
     from bot.handlers.start import register_start
     from bot.handlers.admin import register_admin
     from bot.handlers.signals import register_signals
     from bot.handlers.journal import register_journal
+    from bot.handlers.operations import register_operations
     app = ApplicationBuilder().token(token).build()
     register_start(app)
     register_admin(app)
     register_signals(app)
     register_journal(app)
+    register_operations(app)
     
     # Set bot commands in Telegram menu
     commands = [
@@ -38,6 +57,20 @@ async def run():
         BotCommand("signal", "Generate trade signal (pair arg)"),
         BotCommand("regime", "Check market regime (pair arg)"),
         BotCommand("score", "View confidence breakdown (pair arg)"),
+        BotCommand("journal", "View recent trade signals"),
+        BotCommand("expectancy", "View system performance stats"),
+        # Learning commands
+        BotCommand("weekly_review", "Weekly performance review"),
+        BotCommand("calibration", "Confidence calibration analysis"),
+        BotCommand("feature_importance", "Feature importance analysis"),
+        BotCommand("explain", "Explain signal decision (ID arg)"),
+        # Operational commands
+        BotCommand("health", "Quick health check"),
+        BotCommand("health_report", "Full health report"),
+        BotCommand("system_state", "View system state"),
+        BotCommand("recovery", "View recovery sessions"),
+        BotCommand("diagnostics", "Full diagnostic report"),
+        # Admin commands
         BotCommand("authorize", "Admin: Authorize with PIN"),
         BotCommand("dashboard", "Admin: System overview"),
         BotCommand("users", "Admin: View all users"),
@@ -46,17 +79,16 @@ async def run():
         BotCommand("reject", "Admin: Reject user by ID"),
         BotCommand("suspend", "Admin: Suspend user by ID"),
         BotCommand("resume", "Admin: Resume user by ID"),
+        BotCommand("classify", "Admin: Classify failure (ID type)"),
         BotCommand("risk", "Admin: View risk settings"),
         BotCommand("enable_trading", "Admin: Enable trading"),
         BotCommand("disable_trading", "Admin: Disable trading"),
         BotCommand("invite", "Admin: Generate invite link"),
         BotCommand("healthcheck", "Admin: Check system health"),
         BotCommand("logs", "Admin: View audit logs"),
-        BotCommand("journal", "View recent trade signals"),
-        BotCommand("expectancy", "View system performance stats"),
     ]
     await app.bot.set_my_commands(commands)
-    logger.info("Bot commands registered (21 total)")
+    logger.info("Bot commands registered (31 total)")
     
     logger.info("TITAN V1 ONLINE")
     async with app:
