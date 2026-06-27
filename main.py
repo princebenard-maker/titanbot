@@ -58,6 +58,21 @@ async def run():
     await paper_broker.connect()
     logger.info("Paper broker connected")
     
+    # Initialize Wave 3C scheduler
+    from broker.scheduler import get_scheduler, get_signal_scheduler
+    scheduler = get_scheduler()
+    await scheduler.start()
+    signal_scheduler = get_signal_scheduler()
+    await signal_scheduler.start()
+    logger.info("Schedulers started")
+    
+    # Initialize LLM layer
+    from providers.ai_provider import get_ai_provider, is_ai_available
+    if is_ai_available():
+        logger.info("LLM layer active (OpenRouter)")
+    else:
+        logger.info("LLM layer in mock mode")
+    
     # Conversational handler - processes natural language
     conv_engine = get_conversational_engine()
     
