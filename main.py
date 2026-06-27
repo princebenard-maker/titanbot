@@ -43,12 +43,20 @@ async def run():
     from bot.handlers.journal import register_journal
     from bot.handlers.operations import register_operations
     from bot.handlers.conversational import get_conversational_engine
+    from bot.handlers.paper import register_paper
     app = ApplicationBuilder().token(token).build()
     register_start(app)
     register_admin(app)
     register_signals(app)
     register_journal(app)
     register_operations(app)
+    register_paper(app)
+    
+    # Initialize Wave 3A paper broker
+    from broker.paper import get_paper_broker
+    paper_broker = get_paper_broker()
+    await paper_broker.connect()
+    logger.info("Paper broker connected")
     
     # Conversational handler - processes natural language
     conv_engine = get_conversational_engine()
@@ -106,9 +114,15 @@ async def run():
         BotCommand("invite", "Admin: Generate invite link"),
         BotCommand("healthcheck", "Admin: Check system health"),
         BotCommand("logs", "Admin: View audit logs"),
+        # Paper trading commands
+        BotCommand("account", "Paper account status"),
+        BotCommand("positions", "View open positions"),
+        BotCommand("history", "Trade history"),
+        BotCommand("paper_report", "Paper trading report"),
+        BotCommand("broker", "Current broker status"),
     ]
     await app.bot.set_my_commands(commands)
-    logger.info("Bot commands registered (31 total)")
+    logger.info("Bot commands registered (36 total)")
     
     logger.info("TITAN V1 ONLINE")
     async with app:
