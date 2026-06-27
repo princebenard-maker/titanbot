@@ -36,18 +36,38 @@ async def run():
     await health_monitor.start()
     logger.info("Health monitor started")
     
-    from telegram.ext import ApplicationBuilder
+    from telegram.ext import ApplicationBuilder, MessageHandler, filters
     from bot.handlers.start import register_start
     from bot.handlers.admin import register_admin
     from bot.handlers.signals import register_signals
     from bot.handlers.journal import register_journal
     from bot.handlers.operations import register_operations
+    from bot.handlers.conversational import get_conversational_engine
     app = ApplicationBuilder().token(token).build()
     register_start(app)
     register_admin(app)
     register_signals(app)
     register_journal(app)
     register_operations(app)
+    
+    # Conversational handler - processes natural language
+    conv_engine = get_conversational_engine()
+    
+    async def handle_text(update, context):
+        """Handle free-form text messages."""
+        text = update.message.text.strip()
+        user_id = update.effective_user.id
+        
+        # Ignore commands
+        if text.startswith('/'):
+            return
+        
+        # Process conversationally
+        response = await conv_engine.process(text, user_id)
+        await update.message.reply_text(response)
+    
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    logger.info("Conversational handler registered")
     
     # Set bot commands in Telegram menu
     commands = [
