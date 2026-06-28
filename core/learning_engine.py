@@ -78,16 +78,128 @@ class RollingPerformance:
     max_consecutive_wins: int = 0
 
 
+class LearningMode:
+    """Learning mode types."""
+    CONSERVATIVE = "CONSERVATIVE"      # High confidence only, small size
+    MODERATE = "MODERATE"              # Medium confidence, medium size
+    AGGRESSIVE = "AGGRESSIVE"          # Lower confidence OK, larger size
+    PAPER_TESTING = "PAPER_TESTING"    # Test new strategies
+    RECOVERY = "RECOVERY"              # After losses, very conservative
+
+
 class LearningEngine:
     """
     Titan Learning Engine.
     Analyzes historical decisions without predicting prices.
     """
     
+    # Mode configurations
+    MODE_CONFIGS = {
+        LearningMode.CONSERVATIVE: {
+            "min_confidence": 35,
+            "max_risk_percent": 1.0,
+            "max_positions": 1,
+        },
+        LearningMode.MODERATE: {
+            "min_confidence": 28,
+            "max_risk_percent": 2.0,
+            "max_positions": 2,
+        },
+        LearningMode.AGGRESSIVE: {
+            "min_confidence": 22,
+            "max_risk_percent": 3.0,
+            "max_positions": 3,
+        },
+        LearningMode.PAPER_TESTING: {
+            "min_confidence": 15,
+            "max_risk_percent": 2.0,
+            "max_positions": 1,
+        },
+        LearningMode.RECOVERY: {
+            "min_confidence": 38,
+            "max_risk_percent": 0.5,
+            "max_positions": 1,
+        },
+    }
+    
     def __init__(self):
         self._calibration: Optional[ConfidenceCalibration] = None
         self._feature_importance: Optional[FeatureImportance] = None
         self._rolling: RollingPerformance = RollingPerformance()
+        self._current_mode: str = LearningMode.MODERATE
+        self._mode_reason: str = "Default mode on startup"
+    
+    def get_mode_config(self) -> dict:
+        """Get current mode configuration."""
+        return {
+            "mode": self._current_mode,
+            "reason": self._mode_reason,
+            **self.MODE_CONFIGS.get(self._current_mode, self.MODE_CONFIGS[LearningMode.MODERATE])
+        }
+    
+    async def get_recommended_mode(self) -> str:
+        """Analyze performance and recommend a learning mode."""
+        from db.database import execute_read
+        
+        # Get recent signals
+        signals = await execute_read(
+            """SELECT outcome FROM signals WHERE outcome != 'PENDING' ORDER BY id DESC LIMIT 20"""
+        )
+        
+        if not signals:
+            return LearningMode.MODERATE
+        
+        wins = sum(1 for s in signals if s.get('outcome') == 'WIN')
+        losses = sum(1 for s in signals if s.get('outcome') == 'LOSS')
+        total = wins + losses
+        
+        if total < 5:
+            return LearningMode.PAPER_TESTING
+        
+        win_rate = (wins / total) * 100 if total > 0 else 0
+        
+        # Calculate recent expectancy
+        pnl_values = [s.get('pnl_pct', 0) for s in signals]
+        expectancy = sum(pnl_values) / len(pnl_values) if pnl_values else 0
+        
+        # Check consecutive losses
+        outcomes = [s.get('outcome') for s in reversed(signals)]
+        current_loss_streak = 0
+        for outcome in outcomes:
+            if outcome == 'WIN':
+                break
+            current_loss_streak += 1
+        
+        # Determine mode based on performance
+        if current_loss_streak >= 5:
+            self._mode_reason = f"5+ consecutive losses detected"
+            return LearningMode.RECOVERY
+        elif win_rate < 35 and expectancy < -0.5:
+            self._mode_reason = f"Poor performance: {win_rate:.0f}% WR, {expectancy:.2f}% expectancy"
+            return LearningMode.CONSERVATIVE
+        elif win_rate >= 55 and expectancy >= 1.0:
+            self._mode_reason = f"Strong performance: {win_rate:.0f}% WR, {expectancy:.2f}% expectancy"
+            return LearningMode.AGGRESSIVE
+        elif current_loss_streak >= 3:
+            self._mode_reason = f"3 consecutive losses detected"
+            return LearningMode.RECOVERY
+        else:
+            self._mode_reason = f"Normal performance: {win_rate:.0f}% WR, {expectancy:.2f}% expectancy"
+            return LearningMode.MODERATE
+    
+    async def set_mode(self, mode: str) -> bool:
+        """Manually set learning mode."""
+        valid_modes = [LearningMode.CONSERVATIVE, LearningMode.MODERATE, 
+                      LearningMode.AGGRESSIVE, LearningMode.PAPER_TESTING, 
+                      LearningMode.RECOVERY]
+        
+        if mode not in valid_modes:
+            return False
+        
+        self._current_mode = mode
+        self._mode_reason = f"Manually set to {mode}"
+        logger.info(f"Learning mode changed to {mode}")
+        return True
     
     async def get_weekly_review(self, weeks_back: int = 1) -> WeeklyStats:
         """Generate weekly performance review."""
@@ -505,6 +617,125 @@ class LearningEngine:
             explanation["failure_type"] = breakdown.get('failure_type', FailureType.UNKNOWN)
         
         return explanation
+    
+    def format_weekly_review(self, stats: WeeklyStats) -> str:
+        """Format weekly review for Telegram display."""
+        lines = [
+            "📊 *WEEKLY PERFORMANCE REPORT*",
+            "━━━━━━━━━━━━━━━━━━━━",
+            f"Period: {stats.week_start.strftime('%b %d')} - {stats.week_end.strftime('%b %d')}",
+            "━━━━━━━━━━━━━━━━━━━━",
+            f"Total Trades: *{stats.total_trades}*",
+            f"Wins: *{stats.wins}* | Losses: *{stats.losses}*",
+            f"Win Rate: *{stats.win_rate:.1f}%*",
+            f"Expectancy: *{stats.expectancy:.2f}%*",
+            "━━━━━━━━━━━━━━━━━━━━",
+            f"Avg Confidence: *{stats.avg_confidence:.1f}*",
+            f"Avg ATR: *{stats.avg_atr:.2f}%*",
+        ]
+        
+        if stats.best_pair:
+            lines.append("━━━━━━━━━━━━━━━━━━━━")
+            lines.append(f"🏆 Best Pair: *{stats.best_pair}*")
+            lines.append(f"😰 Worst Pair: *{stats.worst_pair}*")
+        
+        if stats.by_regime:
+            lines.append("━━━━━━━━━━━━━━━━━━━━")
+            lines.append("*By Regime:*")
+            for regime, data in stats.by_regime.items():
+                lines.append(f"  {regime}: {data['win_rate']:.0f}% ({data['total']} trades)")
+        
+        if stats.by_setup:
+            lines.append("━━━━━━━━━━━━━━━━━━━━")
+            lines.append("*By Setup:*")
+            for setup, data in stats.by_setup.items():
+                lines.append(f"  {setup}: {data['win_rate']:.0f}% ({data['total']} trades)")
+        
+        return "\n".join(lines)
+    
+    def format_calibration(self, calibration: ConfidenceCalibration) -> str:
+        """Format confidence calibration for Telegram."""
+        lines = [
+            "🎯 *CONFIDENCE CALIBRATION*",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "*How well does our confidence match actual win rate?*",
+            "━━━━━━━━━━━━━━━━━━━━",
+        ]
+        
+        ranges = [
+            ("35-40", calibration.range_35_40),
+            ("30-34", calibration.range_30_34),
+            ("25-29", calibration.range_25_29),
+            ("20-24", calibration.range_20_24),
+        ]
+        
+        for label, data in ranges:
+            actual = data.get('rate', 0)
+            expected_low = int(label.split('-')[0])
+            expected_high = int(label.split('-')[1])
+            expected_mid = (expected_low + expected_high) / 2
+            
+            diff = actual - expected_mid
+            indicator = "🟢" if abs(diff) < 5 else ("🔴" if diff < 0 else "🟡")
+            
+            lines.append(f"{indicator} Score {label}: *{actual:.1f}%* actual (expected ~{expected_mid:.0f}%)")
+        
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        lines.append("🟢 = Well calibrated | 🔴 = Overconfident | 🟡 = Underconfident")
+        
+        return "\n".join(lines)
+    
+    def format_feature_importance(self, importance: FeatureImportance) -> str:
+        """Format feature importance for Telegram."""
+        features = [
+            ("Trend Alignment", importance.trend_alignment),
+            ("Price Action", importance.price_action),
+            ("Volume", importance.volume),
+            ("MACD", importance.macd),
+            ("ATR", importance.atr),
+            ("News", importance.news),
+        ]
+        
+        sorted_features = sorted(features, key=lambda x: x[1], reverse=True)
+        
+        lines = [
+            "🔍 *FEATURE IMPORTANCE*",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "*Which signals contribute most to wins?*",
+            "━━━━━━━━━━━━━━━━━━━━",
+        ]
+        
+        for name, value in sorted_features:
+            bar = "█" * int(value / 5) + "░" * (20 - int(value / 5))
+            lines.append(f"{name:18} {bar} *{value:.1f}%*")
+        
+        return "\n".join(lines)
+    
+    def format_mode_status(self, mode_config: dict, recommended: str) -> str:
+        """Format learning mode status for Telegram."""
+        emoji = {
+            "CONSERVATIVE": "🛡️",
+            "MODERATE": "⚖️",
+            "AGGRESSIVE": "🚀",
+            "PAPER_TESTING": "🧪",
+            "RECOVERY": "🏥",
+        }
+        
+        mode_emoji = emoji.get(mode_config['mode'], "⚙️")
+        
+        lines = [
+            f"{mode_emoji} *LEARNING MODE: {mode_config['mode']}*",
+            "━━━━━━━━━━━━━━━━━━━━",
+            f"📝 Reason: {mode_config['reason']}",
+            "━━━━━━━━━━━━━━━━━━━━",
+            f"Min Confidence: *{mode_config['min_confidence']}*",
+            f"Max Risk: *{mode_config['max_risk_percent']}%*",
+            f"Max Positions: *{mode_config['max_positions']}*",
+            "━━━━━━━━━━━━━━━━━━━━",
+            f"🤖 Recommended: *{recommended}*",
+        ]
+        
+        return "\n".join(lines)
 
 
 # Global learning engine instance

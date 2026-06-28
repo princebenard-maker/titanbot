@@ -430,6 +430,82 @@ async def classify_failure_command(update: Update, context: ContextTypes.DEFAULT
         await update.message.reply_text(f"❌ Failed to classify signal {signal_id}")
 
 
+async def learning_mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show current learning mode and recommended mode."""
+    learning = get_learning_engine()
+    
+    mode_config = learning.get_mode_config()
+    recommended = await learning.get_recommended_mode()
+    
+    emoji = {
+        "CONSERVATIVE": "🛡️",
+        "MODERATE": "⚖️",
+        "AGGRESSIVE": "🚀",
+        "PAPER_TESTING": "🧪",
+        "RECOVERY": "🏥",
+    }
+    
+    mode_emoji = emoji.get(mode_config['mode'], "⚙️")
+    rec_emoji = emoji.get(recommended, "⚙️")
+    
+    msg = f"{mode_emoji} *LEARNING MODE: {mode_config['mode']}*\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━\n"
+    msg += f"📝 Reason: {mode_config['reason']}\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━\n"
+    msg += "*Configuration:*\n"
+    msg += f"Min Confidence: *{mode_config['min_confidence']}*\n"
+    msg += f"Max Risk: *{mode_config['max_risk_percent']}%*\n"
+    msg += f"Max Positions: *{mode_config['max_positions']}*\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━\n"
+    msg += f"🤖 Recommended: {rec_emoji} *{recommended}*\n"
+    msg += "\n_Use /set_mode <name> to change mode_"
+    
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+
+async def set_mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Set learning mode manually (admin only)."""
+    from core.user_manager import is_admin
+    
+    user_id = update.effective_user.id
+    if not await is_admin(user_id):
+        await update.message.reply_text("❌ Admin only.")
+        return
+    
+    if not context.args:
+        await update.message.reply_text(
+            "ℹ️ Usage: /set_mode <mode>\n\n"
+            "Available modes:\n"
+            "• CONSERVATIVE - 🛡️ High confidence, low risk\n"
+            "• MODERATE - ⚖️ Balanced approach\n"
+            "• AGGRESSIVE - 🚀 Lower confidence OK, higher risk\n"
+            "• PAPER_TESTING - 🧪 For testing strategies\n"
+            "• RECOVERY - 🏥 After losses, very conservative"
+        )
+        return
+    
+    mode = context.args[0].upper()
+    valid_modes = ["CONSERVATIVE", "MODERATE", "AGGRESSIVE", "PAPER_TESTING", "RECOVERY"]
+    
+    if mode not in valid_modes:
+        await update.message.reply_text(f"❌ Invalid mode: {mode}")
+        return
+    
+    learning = get_learning_engine()
+    success = await learning.set_mode(mode)
+    
+    if success:
+        mode_config = learning.get_mode_config()
+        await update.message.reply_text(
+            f"✅ Learning mode set to *{mode}*\n"
+            f"Min confidence: {mode_config['min_confidence']}\n"
+            f"Max risk: {mode_config['max_risk_percent']}%"
+        , parse_mode='Markdown')
+        logger.info(f"User {user_id} changed learning mode to {mode}")
+    else:
+        await update.message.reply_text("❌ Failed to set mode")
+
+
 def register_operations(application):
     """Register all operations commands."""
     # Operational commands
@@ -446,3 +522,5 @@ def register_operations(application):
     application.add_handler(CommandHandler("feature_importance", feature_importance_command))
     application.add_handler(CommandHandler("explain", explain_command))
     application.add_handler(CommandHandler("classify", classify_failure_command))
+    application.add_handler(CommandHandler("learning_mode", learning_mode_command))
+    application.add_handler(CommandHandler("set_mode", set_mode_command))
