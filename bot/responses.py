@@ -1,9 +1,19 @@
 WELCOME_MESSAGE = """
-Welcome to TITAN V1!
+🏁 *TITAN V1 — Ready for Battle!*
 
-I'm your AI-assisted crypto trading system. I help you grow your crypto portfolio through disciplined, rule-based trading on Binance Futures.
+Your AI crypto trading system is live.
 
-To get started, an admin needs to approve your account. Please wait for approval.
+*21-Day Paper Trading Active*
+*100 Trades to Validate Edge*
+
+Key Commands:
+• /account - View paper trading stats
+• /signal <pair> - Generate trade signal
+• /broker - Check broker status
+• /learning_mode - View current strategy mode
+
+*Survival > Large Profits*
+*Discipline > Emotion*
 """
 
 WELCOME_ADMIN_MESSAGE = """

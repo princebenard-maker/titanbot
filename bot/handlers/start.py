@@ -80,7 +80,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         "Wave: 1 — Foundation\n"
         "Trading: Not enabled yet\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "Wave 2 coming soon."
+        "Ready for 21-day paper trading validation!"
     )
 
 def register_start(application):

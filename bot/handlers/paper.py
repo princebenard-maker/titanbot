@@ -163,22 +163,78 @@ async def paper_report_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def paper_reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Reset paper account (admin only)."""
+    from core.user_manager import is_admin
+    
+    user_id = update.effective_user.id
+    if not await is_admin(user_id):
+        await update.message.reply_text("❌ Admin only.")
+        return
+    
     try:
-        # Check admin
-        if not await is_admin(update.effective_user.id):
-            await update.message.reply_text("❌ Admin only.")
-            return
+        broker = get_paper_broker()
+        await broker.reset_account()
+        await update.message.reply_text("✅ Paper account reset to $10.00")
+        logger.info(f"User {user_id} reset paper account")
+    except Exception as e:
+        logger.error(f"Reset error: {e}")
+        await update.message.reply_text(f"❌ Error: {e}")
+
+
+async def quick_status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Quick status - clean dashboard view."""
+    try:
+        from db.database import execute_read
         
         broker = get_paper_broker()
-        success = await broker.reset_account()
+        account = await broker.get_account()
         
-        if success:
-            await update.message.reply_text("✅ Paper account reset. Balance: $10.00")
-        else:
-            await update.message.reply_text("❌ Reset failed.")
+        # Get closed trades
+        trades = await execute_read(
+            """SELECT pnl, exit_reason FROM paper_positions 
+               WHERE status != 'OPEN' ORDER BY created_at DESC LIMIT 100"""
+        )
+        
+        wins = len([t for t in trades if t['pnl'] > 0])
+        losses = len([t for t in trades if t['pnl'] < 0])
+        total = len(trades)
+        
+        # Calculate days running
+        from datetime import datetime
+        days_running = max(1, (datetime.utcnow() - datetime.fromisoformat(account.created_at)).days)
+        
+        # Net profit display
+        net = account.balance - account.initial_balance
+        net_emoji = "🟢" if net >= 0 else "🔴"
+        
+        # Win rate
+        wr = account.win_rate if total > 0 else 0
+        
+        # Progress bar for trades
+        progress = "▓" * min(int(total / 10), 10) + "░" * (10 - min(int(total / 10), 10))
+        
+        lines = [
+            "╔══════════════════════════════╗",
+            "║     🏁 TITAN STATUS          ║",
+            "╠══════════════════════════════╣",
+            f"║ Initial: ${account.initial_balance:.2f}  │ Now: ${account.balance:.2f}     ║",
+            f"║ {net_emoji} Net Profit: ${net:+.2f}            ║",
+            "╠══════════════════════════════╣",
+            f"║ Total Trades: {total:<17}║",
+            f"║ {progress} {total}/100     ║",
+            "╠══════════════════════════════╣",
+            f"║ 🟢 Wins: {wins:<20}║",
+            f"║ 🔴 Losses: {losses:<19}║",
+            f"║ Success Rate: {wr:.0f}%{' '*14}║",
+            "╠══════════════════════════════╣",
+            f"║ Day {days_running} of 21                 ║",
+            f"║ Trades/day: {total/days_running:.1f}              ║",
+            "╚══════════════════════════════╝",
+        ]
+        
+        await update.message.reply_text("\n".join(lines))
         
     except Exception as e:
-        logger.error(f"Paper reset error: {e}")
+        logger.error(f"Quick status error: {e}")
         await update.message.reply_text(f"❌ Error: {e}")
 
 
@@ -219,5 +275,6 @@ def register_paper(app):
     app.add_handler(CommandHandler("paper_report", paper_report_command))
     app.add_handler(CommandHandler("paper_reset", paper_reset_command))
     app.add_handler(CommandHandler("broker", broker_command))
+    app.add_handler(CommandHandler("status", quick_status_command))
     
     logger.info("Paper trading commands registered.")
