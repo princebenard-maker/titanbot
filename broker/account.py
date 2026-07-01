@@ -3,7 +3,7 @@ account.py - WAVE 3A
 Paper Account Management
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from broker.models import Account

@@ -44,6 +44,7 @@ async def run():
     from bot.handlers.operations import register_operations
     from bot.handlers.conversational import get_conversational_engine
     from bot.handlers.paper import register_paper
+    from bot.handlers.scanner_ops import register_scanner_ops
     app = ApplicationBuilder().token(token).build()
     register_start(app)
     register_admin(app)
@@ -51,6 +52,7 @@ async def run():
     register_journal(app)
     register_operations(app)
     register_paper(app)
+    register_scanner_ops(app)  # Scanner commands
     
     # Initialize Wave 3A paper broker
     from broker.paper import get_paper_broker
@@ -65,6 +67,12 @@ async def run():
     signal_scheduler = get_signal_scheduler()
     await signal_scheduler.start()
     logger.info("Schedulers started")
+
+    # Initialize AUTONOMOUS SCANNER
+    from engines.scanner import get_scanner
+    scanner = get_scanner()
+    await scanner.start()
+    logger.info("Market scanner started (autonomous mode)")
     
     # Initialize LLM layer
     from providers.ai_provider import get_ai_provider, is_ai_available
@@ -107,12 +115,17 @@ async def run():
         BotCommand("calibration", "Confidence calibration analysis"),
         BotCommand("feature_importance", "Feature importance analysis"),
         BotCommand("explain", "Explain signal decision (ID arg)"),
+        BotCommand("brain", "View Titan's operational brain"),
+        BotCommand("learning_mode", "View/adjust learning mode"),
         # Operational commands
         BotCommand("health", "Quick health check"),
         BotCommand("health_report", "Full health report"),
         BotCommand("system_state", "View system state"),
         BotCommand("recovery", "View recovery sessions"),
         BotCommand("diagnostics", "Full diagnostic report"),
+        BotCommand("scanner_status", "View market scanner status"),
+        BotCommand("watchlist", "View scanner watchlist"),
+        BotCommand("opportunities", "View top opportunities"),
         # Admin commands
         BotCommand("authorize", "Admin: Authorize with PIN"),
         BotCommand("dashboard", "Admin: System overview"),
@@ -137,9 +150,9 @@ async def run():
         BotCommand("broker", "Current broker status"),
     ]
     await app.bot.set_my_commands(commands)
-    logger.info("Bot commands registered (36 total)")
+    logger.info("Bot commands registered (43 total)")
     
-    logger.info("TITAN V1 ONLINE")
+    logger.info("TITAN V1 ONLINE - AUTONOMOUS MODE")
     async with app:
         await app.initialize()
         await app.start()
