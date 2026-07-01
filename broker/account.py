@@ -37,7 +37,7 @@ class PaperAccountManager:
         now = datetime.utcnow()
         days_since_monday = now.weekday()
         monday = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        return monday - datetime.timedelta(days=days_since_monday)
+        return monday - timedelta(days=days_since_monday)
     
     async def check_survival_limits(self) -> tuple[bool, str]:
         """

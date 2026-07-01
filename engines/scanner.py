@@ -158,8 +158,8 @@ class MarketScanner:
             atr = tr.rolling(14).mean().iloc[-1]
             
             # Calculate volume ratio
-            current_volume = df_1h['volume'].iloc[-20:].mean()
-            avg_volume = df_1h['volume'].iloc[-20:].mean()
+            current_volume = df_1h['volume'].iloc[-1]  # Latest completed candle
+            avg_volume = df_1h['volume'].iloc[-20:].mean()  # Rolling historical average
             volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1.0
             
             # Get regime
@@ -241,7 +241,7 @@ class MarketScanner:
             
             # Trade evaluation
             if result.status == ScanStatus.SCAN:
-                if score >= 28 and regime in ["TRENDING_BULL", "TRENDING_BULL"]:
+                if score >= 28 and regime in ["TRENDING_BULL"]:
                     result.status = ScanStatus.TRADE
                     self.trade_signals += 1
                 else:
