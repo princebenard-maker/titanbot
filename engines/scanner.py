@@ -285,8 +285,11 @@ class MarketScanner:
         """Check if we can execute a new trade."""
         from core.state_manager import get_state_manager
         from broker.paper import get_paper_broker
+        from broker.scheduler import get_scheduler
         
         state_manager = get_state_manager()
+        broker = get_paper_broker()
+        scheduler = get_scheduler()
         
         # Check state
         if not state_manager.can_trade():
@@ -297,18 +300,22 @@ class MarketScanner:
         if state_info.get('state') in ['PAUSED', 'SAFE_MODE']:
             return False, f"Trading paused: {state_info.get('state')}"
         
+        # Check circuit breaker via scheduler
+        account = await broker.get_account()
+        can_trade, cb_reason = scheduler.is_trading_allowed(account.consecutive_losses)
+        if not can_trade:
+            return False, cb_reason
+        
         # Check daily trade limit
         if self._trades_executed_today >= 5:
             return False, "Daily trade limit reached (5)"
         
         # Check open positions
-        broker = get_paper_broker()
         positions = await broker.get_positions()
         if len(positions) >= 3:
             return False, f"Max open positions reached ({len(positions)}/3)"
         
         # Check account
-        account = await broker.get_account()
         if account.available_balance < 1.0:
             return False, f"Insufficient balance: ${account.available_balance:.2f}"
         
