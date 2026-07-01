@@ -275,6 +275,6 @@ def register_paper(app):
     app.add_handler(CommandHandler("paper_report", paper_report_command))
     app.add_handler(CommandHandler("paper_reset", paper_reset_command))
     app.add_handler(CommandHandler("broker", broker_command))
-    app.add_handler(CommandHandler("status", quick_status_command))
+    # Note: /status is registered in start.py for unified account view
     
     logger.info("Paper trading commands registered.")
