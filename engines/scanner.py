@@ -1,6 +1,6 @@
 """
-scanner.py - TITAN V1 AUTONOMOUS MARKET SCANNER
-Scans watchlist continuously, evaluates opportunities.
+scanner.py - TITAN V1 AUTONOMOUS MARKET SCANNER + EXECUTION
+Scans watchlist, evaluates opportunities, executes trades.
 """
 import asyncio
 import logging
@@ -44,8 +44,8 @@ class ScanResult:
 
 class MarketScanner:
     """
-    Autonomous market scanner.
-    Scans watchlist, evaluates opportunities, stores scores.
+    Autonomous market scanner with auto-execution.
+    Scans watchlist, evaluates opportunities, executes paper trades.
     """
     
     # Default watchlist
@@ -70,15 +70,21 @@ class MarketScanner:
     def __init__(self):
         self._running = False
         self._scan_task: Optional[asyncio.Task] = None
+        self._execution_task: Optional[asyncio.Task] = None
         self._watchlist: List[str] = self.DEFAULT_WATCHLIST.copy()
         self._scan_interval = 900  # 15 minutes
         self._last_scan: Dict[str, datetime] = {}
         self._scan_cache: Dict[str, ScanResult] = {}
         self._lock = asyncio.Lock()
         
+        # Execution tracking
+        self._trades_executed_today = 0
+        self._last_execution_reset = datetime.utcnow()
+        
         # Stats
         self.total_scans = 0
         self.trade_signals = 0
+        self.trades_executed = 0
         self.rejections = 0
     
     @property
@@ -86,13 +92,14 @@ class MarketScanner:
         return self._watchlist.copy()
     
     async def start(self):
-        """Start autonomous scanning."""
+        """Start autonomous scanning and execution."""
         if self._running:
             return
         
         self._running = True
         self._scan_task = asyncio.create_task(self._scan_loop())
-        logger.info(f"Market scanner started. Watching {len(self._watchlist)} pairs")
+        self._execution_task = asyncio.create_task(self._execution_loop())
+        logger.info(f"Market scanner started with auto-execution. Watching {len(self._watchlist)} pairs")
     
     async def stop(self):
         """Stop autonomous scanning."""
@@ -102,6 +109,13 @@ class MarketScanner:
             self._scan_task.cancel()
             try:
                 await self._scan_task
+            except asyncio.CancelledError:
+                pass
+        
+        if self._execution_task:
+            self._execution_task.cancel()
+            try:
+                await self._execution_task
             except asyncio.CancelledError:
                 pass
         
@@ -172,12 +186,8 @@ class MarketScanner:
             return {}
     
     async def scan_pair(self, pair: str) -> ScanResult:
-        """
-        Scan a single pair and return result.
-        This is the core scanning logic.
-        """
+        """Scan a single pair and return result."""
         try:
-            # Get market data
             market = await self._get_market_data(pair)
             
             if not market:
@@ -197,7 +207,6 @@ class MarketScanner:
             volume_ratio = market.get("volume_ratio", 1.0)
             current_price = market.get("price", 0)
             
-            # Build result
             result = ScanResult(
                 pair=pair,
                 timestamp=datetime.utcnow(),
@@ -211,29 +220,27 @@ class MarketScanner:
                 confidence_breakdown=breakdown
             )
             
-            # Evaluate for trade
             rejection_reasons = []
             
-            # Check volume
+            # Volume check
             if volume_ratio < self.MIN_VOLUME_RATIO:
                 rejection_reasons.append(f"Low volume: {volume_ratio:.2f}x average")
                 result.status = ScanStatus.LOW_VOLUME
             
-            # Check regime
+            # Regime check
             if regime in ["RANGING", "UNKNOWN"]:
                 rejection_reasons.append(f"Bad regime: {regime}")
                 if result.status == ScanStatus.SCAN:
                     result.status = ScanStatus.BAD_REGIME
             
-            # Check confidence
+            # Confidence check
             if score < 28:
                 rejection_reasons.append(f"Low confidence: {score}/40")
                 if result.status == ScanStatus.SCAN:
                     result.status = ScanStatus.LOW_CONFIDENCE
             
-            # If still scan status, evaluate for trade
+            # Trade evaluation
             if result.status == ScanStatus.SCAN:
-                # Bullish regimes are tradeable
                 if score >= 28 and regime in ["TRENDING_BULL", "TRENDING_BULL"]:
                     result.status = ScanStatus.TRADE
                     self.trade_signals += 1
@@ -247,7 +254,6 @@ class MarketScanner:
             if current_price > 0 and atr > 0:
                 sl_distance = atr * 1.5
                 tp_distance = atr * 2.5
-                
                 result.stop_loss = current_price - sl_distance
                 result.take_profit = current_price + tp_distance
                 result.risk_reward = tp_distance / sl_distance if sl_distance > 0 else 0
@@ -275,16 +281,190 @@ class MarketScanner:
         self.total_scans += 1
         return results
     
+    async def _can_execute_trade(self) -> tuple[bool, str]:
+        """Check if we can execute a new trade."""
+        from core.state_manager import get_state_manager
+        from broker.paper import get_paper_broker
+        
+        state_manager = get_state_manager()
+        
+        # Check state
+        if not state_manager.can_trade():
+            return False, "Trading not allowed by state manager"
+        
+        # Check if paused
+        state_info = state_manager.get_state_info()
+        if state_info.get('state') in ['PAUSED', 'SAFE_MODE']:
+            return False, f"Trading paused: {state_info.get('state')}"
+        
+        # Check daily trade limit
+        if self._trades_executed_today >= 5:
+            return False, "Daily trade limit reached (5)"
+        
+        # Check open positions
+        broker = get_paper_broker()
+        positions = await broker.get_positions()
+        if len(positions) >= 3:
+            return False, f"Max open positions reached ({len(positions)}/3)"
+        
+        # Check account
+        account = await broker.get_account()
+        if account.available_balance < 1.0:
+            return False, f"Insufficient balance: ${account.available_balance:.2f}"
+        
+        return True, "OK"
+    
+    async def _execute_trade(self, scan_result: ScanResult) -> bool:
+        """Execute a paper trade from scan result."""
+        try:
+            from broker.paper import get_paper_broker
+            from core.state_manager import get_state_manager
+            from broker.risk_engine import get_risk_engine
+            
+            broker = get_paper_broker()
+            state_manager = get_state_manager()
+            risk_engine = get_risk_engine()
+            
+            # Verify pair not already traded
+            existing = await broker.get_position_by_pair(scan_result.pair)
+            if existing:
+                logger.info(f"{scan_result.pair} already has open position, skipping")
+                return False
+            
+            # Get account balance
+            account = await broker.get_account()
+            
+            # Calculate position size using risk engine
+            # Risk engine returns (quantity, risk_amount)
+            quantity, risk_amount = risk_engine.calculate_position_size(
+                account_balance=account.balance,
+                entry_price=scan_result.entry_price,
+                stop_loss=scan_result.stop_loss,
+                risk_percent=1.5  # 1.5% risk
+            )
+            
+            if quantity <= 0:
+                logger.warning(f"Risk engine returned invalid quantity for {scan_result.pair}")
+                return False
+            
+            # Execute trade
+            result = await broker.open_position(
+                pair=scan_result.pair,
+                side="BUY",  # Long for bullish
+                entry_price=scan_result.entry_price,
+                stop_loss=scan_result.stop_loss,
+                take_profit=scan_result.take_profit,
+                quantity=quantity,
+                risk_percent=1.5,
+                regime=scan_result.regime,
+                confidence=scan_result.score,
+                setup_type="SCANNER_SIGNAL"
+            )
+            
+            if result.success:
+                self.trades_executed += 1
+                self._trades_executed_today += 1
+                
+                # Log to journal
+                from core.decision_journal import save_signal
+                await save_signal(
+                    symbol=scan_result.pair,
+                    signal="LONG",
+                    score=scan_result.score,
+                    regime=scan_result.regime,
+                    score_breakdown=scan_result.confidence_breakdown,
+                    reasons={"source": "autonomous_scanner"},
+                    setup_type="SCANNER_SIGNAL"
+                )
+                
+                # Audit log
+                from core.audit import log_event
+                log_event("INFO", f"Auto-trade executed: {scan_result.pair}", 
+                         context=f"Score: {scan_result.score}, Qty: {quantity}")
+                
+                logger.info(f"AUTO-TRADE: {scan_result.pair} executed @ ${scan_result.entry_price:.4f}, Qty: {quantity}")
+                return True
+            else:
+                logger.warning(f"Trade execution failed: {result.message}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Trade execution error: {e}")
+            return False
+    
+    async def _execution_loop(self):
+        """Execute trades from scan results."""
+        while self._running:
+            try:
+                # Check if we can trade
+                can_trade, reason = await self._can_execute_trade()
+                
+                if can_trade:
+                    # Get top opportunities
+                    opportunities = await self.get_top_opportunities(limit=3)
+                    
+                    for opp in opportunities:
+                        # Verify we can still trade
+                        can_trade, _ = await self._can_execute_trade()
+                        if not can_trade:
+                            break
+                        
+                        # Execute trade
+                        await self._execute_trade(opp)
+                        
+                        # Small delay between trades
+                        await asyncio.sleep(5)
+                
+                # Check daily reset
+                now = datetime.utcnow()
+                if (now - self._last_execution_reset).days >= 1:
+                    self._trades_executed_today = 0
+                    self._last_execution_reset = now
+                    logger.info("Daily trade counter reset")
+                
+                # Check every 60 seconds
+                await asyncio.sleep(60)
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Execution loop error: {e}")
+                await asyncio.sleep(60)
+    
+    async def _scan_loop(self):
+        """Main scanning loop."""
+        while self._running:
+            try:
+                results = await self.scan_all()
+                
+                async with self._lock:
+                    for result in results:
+                        self._scan_cache[result.pair] = result
+                
+                trade_count = len([r for r in results if r.status == ScanStatus.TRADE])
+                if trade_count > 0:
+                    logger.info(f"Scanner found {trade_count} trade opportunities")
+                
+                await asyncio.sleep(self._scan_interval)
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Scan loop error: {e}")
+                await asyncio.sleep(60)
+    
     async def get_top_opportunities(self, limit: int = 3) -> List[ScanResult]:
         """Get top trading opportunities ranked by score."""
+        # Use cached results if available
+        cached = [r for r in self._scan_cache.values() if r.status == ScanStatus.TRADE]
+        if cached:
+            cached.sort(key=lambda x: x.score, reverse=True)
+            return cached[:limit]
+        
+        # Otherwise scan fresh
         results = await self.scan_all()
-        
-        # Filter to trade signals only
         trade_signals = [r for r in results if r.status == ScanStatus.TRADE]
-        
-        # Sort by score
         trade_signals.sort(key=lambda x: x.score, reverse=True)
-        
         return trade_signals[:limit]
     
     async def get_why_not(self, pair: str) -> ScanResult:
@@ -301,36 +481,13 @@ class MarketScanner:
             "watchlist_size": len(self._watchlist),
             "total_scans": self.total_scans,
             "trade_signals": self.trade_signals,
+            "trades_executed": self.trades_executed,
             "rejections": self.rejections,
+            "trades_today": self._trades_executed_today,
             "signal_rate": f"{(self.trade_signals / max(1, self.total_scans) * 100):.1f}%",
             "running": self._running,
             "last_scan": {k: v.isoformat() for k, v in self._last_scan.items()}
         }
-    
-    async def _scan_loop(self):
-        """Main scanning loop."""
-        while self._running:
-            try:
-                # Scan all pairs
-                results = await self.scan_all()
-                
-                # Cache results
-                async with self._lock:
-                    for result in results:
-                        self._scan_cache[result.pair] = result
-                
-                # Log summary
-                trade_count = len([r for r in results if r.status == ScanStatus.TRADE])
-                if trade_count > 0:
-                    logger.info(f"Scanner found {trade_count} trade opportunities")
-                
-                await asyncio.sleep(self._scan_interval)
-                
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Scan loop error: {e}")
-                await asyncio.sleep(60)  # Retry after 1 minute
 
 
 # Global instance
